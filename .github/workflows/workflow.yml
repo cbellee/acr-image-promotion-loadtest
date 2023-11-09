@@ -1,0 +1,168 @@
+name: Container Image Promotion Workflow
+on:
+  push:
+    branches: [ cbellee-acr-image-promotion-cicd ]
+  pull_request:
+    branches: [ cbellee-acr-image-promotion-cicd ]
+  workflow_dispatch:
+permissions:
+      id-token: write
+      contents: read
+env:
+  imageName: 'todo-api'
+  resourceGroupName: 'acr-import-env-rg'
+  location: 'australiaeast'
+  appName: 'todo-api-app'
+  appPort: '8080'
+jobs:
+  set-env-vars:
+    runs-on: ubuntu-latest
+    outputs:
+      imageName: ${{ steps.set-env.outputs.imageName }}
+      resourceGroupName: ${{ steps.set-env.outputs.resourceGroupName }}
+      location: ${{ steps.set-env.outputs.location }}
+      appName: ${{ steps.set-env.outputs.appName }}
+      appPort: ${{ steps.set-env.outputs.appPort }}
+    steps:
+      - name: Set environment variables
+        id: set-env
+        run: |
+          echo "imageName=${{ env.imageName}}" >> $GITHUB_OUTPUT
+          echo "resourceGroupName=${{ env.resourceGroupName }}" >> $GITHUB_OUTPUT
+          echo "location=${{ env.location }}" >> $GITHUB_OUTPUT
+          echo "appName=${{ env.appName}}" >> $GITHUB_OUTPUT
+          echo "appPort=${{ env.appPort}}" >> $GITHUB_OUTPUT
+  call-deploy-infrastructure:
+    uses: ./.github/workflows/deploy-infrastructure.yml
+    needs: set-env-vars
+    with:
+      resourceGroupName: ${{ needs.set-env-vars.outputs.resourceGroupName }}
+      templateFilePath: ./bicep/main.bicep
+      location: ${{ needs.set-env-vars.outputs.location }}
+    secrets:
+      client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+  call-build-and-push-image-to-dev:
+    uses: ./.github/workflows/build-and-push-image.yml
+    needs: [set-env-vars, call-deploy-infrastructure]
+    with:
+      registryName: ${{ needs.call-deploy-infrastructure.outputs.devAcrName }}
+      resourceGroupName: ${{ needs.set-env-vars.outputs.resourceGroupName }}
+      imageName: ${{ needs.set-env-vars.outputs.imageName }}
+      dockerFilePath: ./todo-api/Dockerfile
+      appSourcePath: ./todo-api
+    secrets:
+      client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+  call-deploy-container-app-to-dev:
+    uses: ./.github/workflows/deploy-container-app.yml
+    needs: [set-env-vars, call-deploy-infrastructure, call-build-and-push-image-to-dev]
+    with:
+      environment: dev
+      location: ${{ needs.set-env-vars.outputs.location }}
+      registryName: ${{ needs.call-deploy-infrastructure.outputs.devAcrName }}
+      resourceGroupName: ${{ needs.set-env-vars.outputs.resourceGroupName }}
+      templateFilePath: ./bicep/modules/azureContainerApp.bicep
+      acaEnvironmentName: ${{ needs.call-deploy-infrastructure.outputs.devAcaName }}
+      appName: ${{ needs.set-env-vars.outputs.appName }}
+      appPort: ${{ needs.set-env-vars.outputs.appPort }}
+      imageNameAndTag: "${{ needs.set-env-vars.outputs.imageName }}:${{ needs.call-build-and-push-image-to-dev.outputs.imageTag }}"   
+    secrets:
+      client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+  call-run-load-test-on-dev:
+    uses: ./.github/workflows/run-load-test.yml
+    needs: [set-env-vars, call-deploy-infrastructure, call-deploy-container-app-to-dev]
+    with:
+      appFqdn: ${{ needs.call-deploy-container-app-to-dev.outputs.appFqdn }}
+      resourceGroupName: ${{ needs.set-env-vars.outputs.resourceGroupName }}
+      loadTestName: ${{ needs.call-deploy-infrastructure.outputs.loadTestName }}
+      loadTestConfigFileName: ./tests/load_test_config.yaml
+    secrets:
+      client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+  call-import-container-image-to-test:
+    uses: ./.github/workflows/import-container-image.yml
+    needs: [set-env-vars, call-deploy-infrastructure, call-build-and-push-image-to-dev, call-run-load-test-on-dev]
+    with:
+      sourceRegistryName: ${{ needs.call-deploy-infrastructure.outputs.devAcrName }}
+      destinationRegistryName: ${{ needs.call-deploy-infrastructure.outputs.testAcrName }}
+      imageNameAndTag: "${{ needs.set-env-vars.outputs.imageName }}:${{ needs.call-build-and-push-image-to-dev.outputs.imageTag }}"
+    secrets:
+      client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+  call-deploy-container-app-to-test:
+    uses: ./.github/workflows/deploy-container-app.yml
+    needs: [set-env-vars, call-deploy-infrastructure, call-build-and-push-image-to-dev, call-import-container-image-to-test]
+    with:
+      environment: test
+      location: ${{ needs.set-env-vars.outputs.location }}
+      registryName: ${{ needs.call-deploy-infrastructure.outputs.testAcrName }}
+      resourceGroupName: ${{ needs.set-env-vars.outputs.resourceGroupName }}
+      templateFilePath: ./bicep/modules/azureContainerApp.bicep
+      acaEnvironmentName: ${{ needs.call-deploy-infrastructure.outputs.testAcaName }}
+      appName: ${{ needs.set-env-vars.outputs.appName }}
+      appPort: ${{ needs.set-env-vars.outputs.appPort }}
+      imageNameAndTag: "${{ needs.set-env-vars.outputs.imageName }}:${{ needs.call-build-and-push-image-to-dev.outputs.imageTag }}"   
+    secrets:
+      client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+  call-run-load-test-on-test:
+    uses: ./.github/workflows/run-load-test.yml
+    needs: [set-env-vars, call-deploy-infrastructure, call-deploy-container-app-to-test]
+    with:
+      appFqdn: ${{ needs.call-deploy-container-app-to-test.outputs.appFqdn }}
+      resourceGroupName: ${{ needs.set-env-vars.outputs.resourceGroupName }}
+      loadTestName: ${{ needs.call-deploy-infrastructure.outputs.loadTestName }}
+      loadTestConfigFileName: ./tests/load_test_config.yaml
+    secrets:
+      client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+  call-import-container-image-to-prod:
+    uses: ./.github/workflows/import-container-image.yml
+    needs: [set-env-vars, call-deploy-infrastructure, call-build-and-push-image-to-dev, call-run-load-test-on-test]
+    with:
+      sourceRegistryName: ${{ needs.call-deploy-infrastructure.outputs.testAcrName }}
+      destinationRegistryName: ${{ needs.call-deploy-infrastructure.outputs.prodAcrName }}
+      imageNameAndTag: "${{ needs.set-env-vars.outputs.imageName }}:${{ needs.call-build-and-push-image-to-dev.outputs.imageTag }}"
+    secrets:
+      client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+  call-deploy-container-app-to-prod:
+    uses: ./.github/workflows/deploy-container-app.yml
+    needs: [set-env-vars, call-deploy-infrastructure, call-build-and-push-image-to-dev, call-import-container-image-to-prod]
+    with:
+      environment: prod
+      location: ${{ needs.set-env-vars.outputs.location }}
+      registryName: ${{ needs.call-deploy-infrastructure.outputs.prodAcrName }}
+      resourceGroupName: ${{ needs.set-env-vars.outputs.resourceGroupName }}
+      templateFilePath: ./bicep/modules/azureContainerApp.bicep
+      acaEnvironmentName: ${{ needs.call-deploy-infrastructure.outputs.prodAcaName }}
+      appName: ${{ needs.set-env-vars.outputs.appName }}
+      appPort: ${{ needs.set-env-vars.outputs.appPort }}
+      imageNameAndTag: "${{ needs.set-env-vars.outputs.imageName }}:${{ needs.call-build-and-push-image-to-dev.outputs.imageTag }}"   
+    secrets:
+      client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+  call-run-load-test-on-prod:
+    uses: ./.github/workflows/run-load-test.yml
+    needs: [set-env-vars, call-deploy-infrastructure, call-build-and-push-image-to-dev, call-deploy-container-app-to-prod]
+    with:
+      appFqdn: ${{ needs.call-deploy-container-app-to-prod.outputs.appFqdn }}
+      resourceGroupName: ${{ needs.set-env-vars.outputs.resourceGroupName }}
+      loadTestName: ${{ needs.call-deploy-infrastructure.outputs.loadTestName }}
+      loadTestConfigFileName: ./tests/load_test_config.yaml   
+    secrets:
+      client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+     

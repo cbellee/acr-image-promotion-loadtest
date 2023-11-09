@@ -1,0 +1,74 @@
+name: Deploy Container App
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      location:
+        required: true
+        type: string
+      registryName:
+        required: true
+        type: string
+      resourceGroupName:
+        required: true
+        type: string
+      templateFilePath:
+        required: true
+        type: string
+      acaEnvironmentName:
+        required: true
+        type: string
+      appName:
+        required: true
+        type: string
+      appPort:
+        required: true
+        type: string
+      imageNameAndTag: 
+        required: true
+        type: string
+    secrets:
+      client-id:
+        required: true
+      tenant-id:
+        required: true
+      subscription-id:
+        required: true
+    outputs:
+      appFqdn:
+        value: ${{ jobs.deploy-container-app.outputs.appFqdn }}
+jobs:
+  deploy-container-app:
+    runs-on: ubuntu-latest
+    outputs:
+      appFqdn: ${{ steps.deploy_azure_container_app.outputs.appFqdn }}
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v3
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.client-id }}
+        tenant-id: ${{ secrets.tenant-id }}
+        subscription-id: ${{ secrets.subscription-id }}
+    - name: Deploy Azure Container App
+      id: deploy_azure_container_app
+      run: |
+        az deployment group create \
+          --name "${{ inputs.environment }}-app-deployment" \
+          --resource-group ${{ inputs.resourceGroupName }} \
+          --template-file ${{ inputs.templateFilePath }} \
+          --parameters location=${{ inputs.location }} \
+          --parameters imageName=${{ inputs.registryName }}.azurecr.io/${{ inputs.imageNameAndTag }} \
+          --parameters environment=${{ inputs.environment }} \
+          --parameters appName=${{ inputs.appName }} \
+          --parameters appPort=${{ inputs.appPort }} \
+          --parameters acrName=${{ inputs.registryName }} \
+          --parameters containerAppEnvironmentName=${{ inputs.acaEnvironmentName }}
+        
+        echo "appFqdn=$(az deployment group show \
+          --name "${{ inputs.environment }}-app-deployment" \
+          --resource-group ${{ inputs.resourceGroupName }} \
+          --query properties.outputs.appFqdn.value)" >> $GITHUB_OUTPUT

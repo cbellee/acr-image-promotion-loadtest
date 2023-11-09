@@ -1,0 +1,79 @@
+name: Deploy Infrastructure
+on:
+  workflow_call:
+    inputs:
+      resourceGroupName:
+        required: true
+        type: string
+      templateFilePath:
+        required: true
+        type: string
+      location: 
+        required: true
+        type: string
+    secrets:
+      client-id:
+        required: true
+      tenant-id:
+        required: true
+      subscription-id:
+        required: true
+    outputs:
+      devAcaName: 
+        value: ${{ jobs.deploy-infra.outputs.devAcaName }}
+      testAcaName: 
+        value: ${{ jobs.deploy-infra.outputs.testAcaName }}
+      prodAcaName: 
+        value: ${{ jobs.deploy-infra.outputs.prodAcaName }}
+      devAcrName: 
+        value: ${{ jobs.deploy-infra.outputs.devAcrName }}
+      testAcrName: 
+        value: ${{ jobs.deploy-infra.outputs.testAcrName }}
+      prodAcrName: 
+        value: ${{ jobs.deploy-infra.outputs.prodAcrName }}
+      loadTestName: 
+        value: ${{ jobs.deploy-infra.outputs.loadTestName }}
+jobs:
+  deploy-infra:
+    name: 'Deploy Infrastructure'
+    runs-on: ubuntu-latest
+    outputs: 
+      devAcaName: ${{ steps.deploy-infrastructure.outputs.devAcaName }}
+      testAcaName: ${{ steps.deploy-infrastructure.outputs.testAcaName }}
+      prodAcaName: ${{ steps.deploy-infrastructure.outputs.prodAcaName }}
+      devAcrName: ${{ steps.deploy-infrastructure.outputs.devAcrName }}
+      testAcrName: ${{ steps.deploy-infrastructure.outputs.testAcrName }}
+      prodAcrName: ${{ steps.deploy-infrastructure.outputs.prodAcrName }}
+      loadTestName: ${{ steps.deploy-infrastructure.outputs.loadTestName }}
+    steps:
+    - name: 'Check out repository'
+      uses: actions/checkout@v3
+    - name: 'Azure Login'
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.client-id }}
+        tenant-id: ${{ secrets.tenant-id }}
+        subscription-id: ${{ secrets.subscription-id }}
+    - name: 'Deploy Infrastructure'
+      id: deploy-infrastructure
+      run: |
+        az group create \
+          --resource-group ${{ inputs.resourceGroupName }} \
+          --location ${{ inputs.location }}
+
+        az deployment group create \
+          --name 'infra-deployment' \
+          --resource-group ${{ inputs.resourceGroupName}} \
+          --template-file ${{ inputs.templateFilePath }} \
+          --parameters location=${{ inputs.location }}
+        
+        echo "devAcaName=$(az deployment group show --name 'infra-deployment' --resource-group ${{ inputs.resourceGroupName }} --query properties.outputs.acaEnvironments.value | jq 'map(select(any(.environment; contains("dev")))|.name)[]' -r)" >> $GITHUB_OUTPUT
+        echo "testAcaName=$(az deployment group show --name 'infra-deployment' --resource-group ${{ inputs.resourceGroupName }} --query properties.outputs.acaEnvironments.value | jq 'map(select(any(.environment; contains("test")))|.name)[]' -r)" >> $GITHUB_OUTPUT
+        echo "prodAcaName=$(az deployment group show --name 'infra-deployment' --resource-group ${{ inputs.resourceGroupName }} --query properties.outputs.acaEnvironments.value | jq 'map(select(any(.environment; contains("prod")))|.name)[]' -r)" >> $GITHUB_OUTPUT
+     
+        echo "devAcrName=$(az deployment group show --name 'infra-deployment' --resource-group ${{ inputs.resourceGroupName }} --query properties.outputs.acrEnvironments.value | jq 'map(select(any(.environment; contains("dev")))|.name)[]' -r)" >> $GITHUB_OUTPUT
+        echo "testAcrName=$(az deployment group show --name 'infra-deployment' --resource-group ${{ inputs.resourceGroupName }} --query properties.outputs.acrEnvironments.value | jq 'map(select(any(.environment; contains("test")))|.name)[]' -r)" >> $GITHUB_OUTPUT
+        echo "prodAcrName=$(az deployment group show --name 'infra-deployment' --resource-group ${{ inputs.resourceGroupName }} --query properties.outputs.acrEnvironments.value | jq 'map(select(any(.environment; contains("prod")))|.name)[]' -r)" >> $GITHUB_OUTPUT
+        
+        echo "loadTestName=$(az deployment group show --name 'infra-deployment' --resource-group ${{ inputs.resourceGroupName }} --query properties.outputs.loadTestName.value -o tsv)" >> $GITHUB_OUTPUT
+  

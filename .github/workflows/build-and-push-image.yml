@@ -1,0 +1,65 @@
+name: Build And Push Image
+on:
+  workflow_call:
+    inputs:
+      registryName:
+        required: true
+        type: string
+      resourceGroupName:
+        required: true
+        type: string
+      imageName: 
+        required: true
+        type: string
+      dockerFilePath:
+        required: true
+        type: string
+      appSourcePath:
+        required: true
+        type: string
+    secrets:
+      client-id:
+        required: true
+      tenant-id:
+        required: true
+      subscription-id:
+        required: true
+    outputs:
+      imageTag:
+        value: ${{ jobs.build-and-push-image.outputs.imageTag }}
+jobs:
+  build-and-push-image:
+    name: 'Build and Push image'
+    runs-on: ubuntu-latest
+    outputs: 
+      imageTag: ${{ steps.generate_image_tag.outputs.imageTag }}
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v3
+    - name: Check out public repository
+      uses: actions/checkout@v3
+      with:
+        repository: cbellee/todo-api
+        ref: main
+        path: todo-api
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.client-id }}
+        tenant-id: ${{ secrets.tenant-id }}
+        subscription-id: ${{ secrets.subscription-id }}
+    - name: Generate DateTime Stamp
+      run: |
+        echo "dateTimeStamp=$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
+    - name: Generate Image Tag
+      id: generate_image_tag
+      run: |
+        echo "imageTag=${{ env.dateTimeStamp }}-${{ github.run_number }}" >> $GITHUB_OUTPUT
+    - name: Build and Push Container image
+      uses: azure/CLI@v1
+      with:
+        inlineScript: |
+          az acr build \
+            --registry ${{ inputs.registryName }} \
+            --image ${{ inputs.imageName }}:${{ env.dateTimeStamp }}-${{ github.run_number }} \
+            --file ${{ inputs.dockerFilePath }} ${{ inputs.appSourcePath }}

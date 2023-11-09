@@ -1,0 +1,38 @@
+name: Import Container Image
+on:
+  workflow_call:
+    inputs:
+      sourceRegistryName:
+        required: true
+        type: string
+      destinationRegistryName:
+        required: true
+        type: string
+      imageNameAndTag: 
+        required: true
+        type: string
+    secrets:
+      client-id:
+        required: true
+      tenant-id:
+        required: true
+      subscription-id:
+        required: true
+jobs:
+  import-container-image:
+    name: Import container image
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v3
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.client-id }}
+        tenant-id: ${{ secrets.tenant-id }}
+        subscription-id: ${{ secrets.subscription-id }}
+    - name: Import container image
+      uses: azure/CLI@v1
+      with:
+        inlineScript: |
+          az acr import --name ${{ inputs.destinationRegistryName }} --source "${{ inputs.sourceRegistryName }}.azurecr.io/${{ inputs.imageNameAndTag }}"

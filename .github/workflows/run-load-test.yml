@@ -1,0 +1,49 @@
+name: Run Load Test
+on:
+  workflow_call:
+    inputs:
+      appFqdn:
+        required: true
+        type: string
+      resourceGroupName:
+        required: true
+        type: string
+      loadTestName:
+        required: true
+        type: string
+      loadTestConfigFileName:
+        required: true
+        type: string
+    secrets:
+      client-id:
+        required: true
+      tenant-id:
+        required: true
+      subscription-id:
+        required: true
+jobs:
+  run-load-test:
+    name: 'Run Load Test'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v3
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.client-id }}
+        tenant-id: ${{ secrets.tenant-id }}
+        subscription-id: ${{ secrets.subscription-id }}
+    - name: 'Azure Load Test'
+      uses: azure/load-testing@v1
+      with:
+        loadTestConfigFile: ${{ inputs.loadTestConfigFileName }}
+        loadTestResource: ${{ inputs.loadTestName }}
+        resourceGroup: ${{ inputs.resourceGroupName }}
+        env: |
+          [
+            {
+            "name": "aca_fqdn",
+            "value": ${{ inputs.appFqdn }}
+            }
+          ]
