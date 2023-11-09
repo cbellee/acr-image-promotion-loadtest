@@ -21,7 +21,7 @@ resource wks 'Microsoft.OperationalInsights/workspaces@2021-06-01' = {
   tags: tags
   properties: {
     sku: {
-      name: 'Standard'
+      name: 'PerGB2018'
     }
   }
 }

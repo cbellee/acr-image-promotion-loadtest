@@ -26,7 +26,7 @@ az role assignment create --role owner \
   --scope /subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP
 
 # add federated credentials
-az rest --method POST --uri "https://graph.microsoft.com/beta/applications/$APP_OBJECT_ID/federatedIdentityCredentials" --body "{\"name\":\"$CREDENTIAL_NAME\",\"issuer\":\"https://token.actions.githubusercontent.com\",\"subject\":\"repo:$GITHUB_USER/$GITHUB_REPO:ref:refs/heads/acr-image-promotion-loadtest\",\"description\":\"GitHub Federated Identity Credential\",\"audiences\":[\"api://AzureADTokenExchange\"]}" 
+az rest --method POST --uri "https://graph.microsoft.com/beta/applications/$APP_OBJECT_ID/federatedIdentityCredentials" --body "{\"name\":\"$CREDENTIAL_NAME\",\"issuer\":\"https://token.actions.githubusercontent.com\",\"subject\":\"repo:$GITHUB_USER/$GITHUB_REPO:ref:refs/heads/main\",\"description\":\"GitHub Federated Identity Credential\",\"audiences\":[\"api://AzureADTokenExchange\"]}" 
 
 # add the following secrets to your GitHub account in the GitHub portal: 'Settings' -> 'Secrets' -> 'Actions' -> 'New Repository Secret'
 ':
