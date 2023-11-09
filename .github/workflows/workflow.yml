@@ -10,7 +10,7 @@ permissions:
       contents: read
 env:
   imageName: 'todo-api'
-  resourceGroupName: 'acr-import-env-rg'
+  resourceGroupName: 'acr-image-promotion-loadtest-rg'
   location: 'australiaeast'
   appName: 'todo-api-app'
   appPort: '8080'

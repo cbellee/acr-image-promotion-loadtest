@@ -1,9 +1,12 @@
 TENANT_ID=$(az account show --query tenantId -o tsv)
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-RESOURCE_GROUP='acr-import-env-rg'
+LOCATION='australiaeast'
+RESOURCE_GROUP='acr-image-promotion-loadtest-rg'
 CREDENTIAL_NAME='github-federated-id-credential'
 GITHUB_USER='cbellee'
-GITHUB_REPO='fta-docs-acr-image-promotion'
+GITHUB_REPO='acr-image-promotion-loadtest'
+
+az group create --name $RESOURCE_GROUP --location $LOCATION
 
 # create application registration
 APP_OBJECT_ID=$(az ad app create --display-name github-action-federated-id --query id -o tsv)
@@ -23,7 +26,7 @@ az role assignment create --role owner \
   --scope /subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP
 
 # add federated credentials
-az rest --method POST --uri "https://graph.microsoft.com/beta/applications/$APP_OBJECT_ID/federatedIdentityCredentials" --body "{\"name\":\"$CREDENTIAL_NAME\",\"issuer\":\"https://token.actions.githubusercontent.com\",\"subject\":\"repo:$GITHUB_USER/$GITHUB_REPO:ref:refs/heads/cbellee-acr-image-promotion-cicd\",\"description\":\"GitHub Federated Identity Credential\",\"audiences\":[\"api://AzureADTokenExchange\"]}" 
+az rest --method POST --uri "https://graph.microsoft.com/beta/applications/$APP_OBJECT_ID/federatedIdentityCredentials" --body "{\"name\":\"$CREDENTIAL_NAME\",\"issuer\":\"https://token.actions.githubusercontent.com\",\"subject\":\"repo:$GITHUB_USER/$GITHUB_REPO:ref:refs/heads/acr-image-promotion-loadtest\",\"description\":\"GitHub Federated Identity Credential\",\"audiences\":[\"api://AzureADTokenExchange\"]}" 
 
 # add the following secrets to your GitHub account in the GitHub portal: 'Settings' -> 'Secrets' -> 'Actions' -> 'New Repository Secret'
 ':
