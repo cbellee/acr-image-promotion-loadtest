@@ -1,9 +1,9 @@
 name: Container Image Promotion Workflow
 on:
   push:
-    branches: [ cbellee-acr-image-promotion-cicd ]
+    branches: [ main ]
   pull_request:
-    branches: [ cbellee-acr-image-promotion-cicd ]
+    branches: [ main ]
   workflow_dispatch:
 permissions:
       id-token: write
