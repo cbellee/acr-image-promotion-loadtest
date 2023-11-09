@@ -50,8 +50,8 @@ jobs:
       registryName: ${{ needs.call-deploy-infrastructure.outputs.devAcrName }}
       resourceGroupName: ${{ needs.set-env-vars.outputs.resourceGroupName }}
       imageName: ${{ needs.set-env-vars.outputs.imageName }}
-      dockerFilePath: ./todo-api/Dockerfile
-      appSourcePath: ./todo-api
+      dockerFilePath: ../todo-api/Dockerfile
+      appSourcePath: ../todo-api
     secrets:
       client-id: ${{ secrets.AZURE_CLIENT_ID }}
       subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
