@@ -76,8 +76,7 @@ resource app 'Microsoft.App/containerApps@2022-03-01' = {
             cpu: '0.25'
             memory: '0.5Gi'
           }
-          env: [
-          ]
+          env: []
         }
       ]
       scale: {
@@ -86,6 +85,9 @@ resource app 'Microsoft.App/containerApps@2022-03-01' = {
       }
     }
   }
+  dependsOn: [
+    umidRoleAssignment
+  ]
 }
 
 output appFqdn string = app.properties.configuration.ingress.fqdn
